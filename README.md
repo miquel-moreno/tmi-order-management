@@ -1,313 +1,182 @@
-# Taller de Pedidos (demo) — gestión de pedidos de plegado de chapa
+# Taller de Pedidos — demo
 
-Sistema para una SL de plegado de chapa de aluminio con 1 cizalla + 1 plegadora.
-Recibe pedidos por **WhatsApp** y **email**, los clasifica, prioriza y los muestra
-en un **panel de taller** pensado para tablet junto a la plegadora.
+Panel de gestión de pedidos para un taller de plegado de chapa de aluminio.
+**Es una demostración con datos completamente ficticios.** No está desplegado en
+ningún cliente ni contiene datos reales de nadie.
 
----
-
-## 1. Resumen de la solución
-
-- **Backend**: Node.js + Express + SQLite (better-sqlite3). Base de datos en un
-  solo archivo, cero admin, migrable a Postgres sin tocar lógica.
-- **Frontend**: un único `index.html` con CSS/JS vanilla servido por el mismo
-  backend. Sin build step, sin `npm install` en la tablet — abres una URL y
-  funciona. Botones grandes, código de color por prioridad, auto-refresh.
-- **Parser**: regex + heurísticas en español para extraer `nº pedido`,
-  `fecha de entrega`, `urgencia`, `medidas`, `radio de plegado` y detectar si
-  requiere cizalla. Aislado en `services/parser.js` para poder sustituirlo
-  por otra implementación en el futuro sin tocar nada más.
-- **Webhooks**: endpoints `POST /api/webhooks/whatsapp` y `/email` que aceptan
-  un payload normalizado simple. Cuando conectes WhatsApp Cloud API o un
-  proveedor de email (Mailgun, SES, Postmark) solo traduces su payload al
-  formato normalizado dentro del mismo archivo.
-- **Modo demo**: `POST /api/demo/seed` crea 6 pedidos ficticios con dibujos
-  SVG generados al vuelo — útil para probar el panel sin datos reales.
+Stack: **Node.js + Express + SQLite** (backend) y un **panel HTML/CSS/JS sin
+build** (frontend), servido por el mismo proceso. Sin framework de frontend, sin
+bundler, sin dependencias de servicios externos.
 
 ---
 
-## 2. Arquitectura técnica
+## El problema que resuelve
+
+En un taller pequeño (una cizalla, una plegadora), los pedidos llegan por
+WhatsApp y por email en **texto libre**, sin formato:
+
+> «Pedido 90234, lo necesito hoy. 400x200 e=2mm, 2 pliegues r=3mm. RAL 9016.»
+
+No hay número de pedido normalizado, ni fecha de entrega estructurada, ni
+prioridad. El operario decide qué plegar mirando un grupo de mensajes.
+
+Este sistema **lee ese texto libre**, extrae los datos, asigna una prioridad y
+coloca cada pedido en su cola de trabajo, en un panel pensado para una tablet
+junto a la máquina.
+
+Para verlo en marcha en la demo: pulsa **«Simular WhatsApp»** o **«Simular
+email»** en el panel. Entra un mensaje de ejemplo y sale un pedido ya
+clasificado.
+
+---
+
+## Recorrido de un pedido
+
+1. **Entra un mensaje.** En la demo, desde el botón de simular (endpoint interno
+   `POST /api/demo/simulate`) o desde el formulario de alta manual. El diseño
+   contempla también webhooks de WhatsApp/email (ver *Seguridad*).
+2. **El parser lo interpreta** (`services/parser.js`): normaliza el texto (quita
+   tildes, minúsculas) y extrae con expresiones regulares y heurísticas en
+   español el número de pedido, la urgencia y la fecha, las medidas, el radio o
+   número de pliegues, la categoría de pieza, el código RAL y si requiere corte
+   previo en cizalla.
+3. **Se deriva la prioridad** de la urgencia detectada: hoy → crítica, mañana a
+   primera hora → muy alta, mañana → alta, pasado mañana → media, sin fecha →
+   pendiente de validar.
+4. **Se decide el estado inicial** (`services/orders.js`): si falta información
+   (número, fecha o dibujo) va a *pendiente de validar*; si requiere corte, a
+   *pendiente de corte*; si no, directo a *pendiente de plegado*.
+5. **Se escribe todo en una transacción**: el pedido, sus adjuntos, una copia
+   íntegra del mensaje original y los eventos de trazabilidad. O entra todo, o
+   nada.
+6. **Aparece en el panel**, en su cola y con su color de prioridad. El operario
+   lo hace avanzar con un único botón que muestra la siguiente acción (INICIAR
+   CORTE, INICIAR PLEGADO, TERMINAR, …), validada contra la máquina de estados.
+
+---
+
+## Modelo de datos
+
+SQLite, 7 tablas (`models/db.js`): `orders`, `attachments`, `inbound_messages`,
+`order_events`, `clients`, `users`, `machines`, con índices sobre estado,
+prioridad y fecha de vencimiento.
+
+- **`orders`** guarda **`raw_text` siempre** (el mensaje original completo),
+  además de los campos extraídos y las marcas de tiempo de cada fase.
+- **`inbound_messages`** conserva el payload original por separado.
+- **`order_events`** es un log append-only: `created`, `incomplete_flag`,
+  `status_changed`, `priority_changed`, `fields_updated`, `attachment_added`,
+  cada uno con actor y timestamp.
+- **`is_demo`** marca los datos de demostración para poder borrarlos sin tocar
+  nada más.
+
+### Estados del pedido
 
 ```
-  ┌────────────────┐        ┌────────────────┐
-  │  WhatsApp API  │        │  Email proveedor│
-  └────────┬───────┘        └────────┬────────┘
-           │ webhook                 │ webhook
-           └──────────┬──────────────┘
-                      ▼
-         ┌────────────────────────┐
-         │  Backend (Express)     │
-         │  - Webhooks            │
-         │  - Parser              │
-         │  - Servicio de órdenes │
-         │  - API REST            │
-         │  - Static /uploads     │
-         └────────┬───────────────┘
-                  │
-       ┌──────────┼──────────────┐
-       ▼          ▼              ▼
-   SQLite    Filesystem     Frontend
-   (pedidos) (dibujos)      (panel taller)
+Solo plegado:   pending_press_brake → in_press_brake → done → ready_for_pickup → delivered
+Corte+plegado:  pending_shear → in_shear → sheared → pending_press_brake → in_press_brake → done → …
+                (desde cualquier estado operativo se puede marcar 'incident')
 ```
 
-**Por qué este stack**
-
-- **SQLite** para un MVP que corre en una máquina del taller o VPS pequeño:
-  cero administración, transaccional, rápido y más que suficiente para miles
-  de pedidos al mes. Cambiar a Postgres es cuestión de reescribir `db.js`.
-- **Express** es boring tech — bien documentado, cualquier dev lo mantiene.
-- **HTML/JS vanilla** en el panel evita la complicación de builds, CI, Node en
-  la tablet, versiones de React, etc. El taller no debería depender de un
-  pipeline de frontend para funcionar.
-- **better-sqlite3** es síncrono y rápido; simplifica mucho el código
-  comparado con drivers asíncronos.
+Las transiciones válidas están centralizadas en un único objeto
+(`STATUS_TRANSITIONS`); el servidor rechaza cualquier salto no permitido.
 
 ---
 
-## 3. Modelo de datos
+## Decisiones de diseño (con su coste)
 
-Tablas principales (ver `backend/src/models/db.js`):
-
-| Tabla             | Propósito |
-|-------------------|-----------|
-| `orders`          | Pedido interno. Guarda `external_number`, `channel`, `sender`, **`raw_text` (siempre)**, `measurements`, `bend_radius`, `requires_shear`, `requires_press_brake`, `priority`, `status`, `due_at`, timestamps de cada fase, `is_demo`. |
-| `attachments`     | Imágenes/dibujos ligados al pedido. Nunca se pierden — están en disco + registro en DB. |
-| `inbound_messages`| Copia del mensaje original (WhatsApp/email). Sirve para auditar y reparsear si cambia el parser. |
-| `order_events`    | Log de trazabilidad: creación, cambios de estado, subida de adjunto, marca de incidencia, etc. Actor + timestamp + metadata JSON. |
-| `clients`         | Catálogo de clientes (para el MVP casi no se usa, pero queda preparado). |
-| `users`           | Operarios / admins. El MVP usa actor como string; en fase 2 se convierte en auth real. |
-| `machines`        | Cizalla y plegadora. Preparado para cuando haya más de una. |
-
-Todo pedido guarda el **texto original completo** (`raw_text`) por si el parser
-se equivoca — se puede reprocesar.
-
----
-
-## 4. Estados del pedido
-
-```
-received
-   │
-   ▼
-pending_validation ◄── (si falta info)
-   │
-   ▼
-pending_shear → in_shear → sheared ─┐
-                                     ▼
-                               pending_press_brake → in_press_brake → done
-                                                                        │
-                                                                        ▼
-                                                             ready_for_pickup → delivered
-
-               ─────► incident  (desde cualquier estado operativo)
-```
-
-Un pedido puede:
-- **Solo plegadora**: `received → pending_press_brake → in_press_brake → done → …`
-- **Cizalla + plegadora**: `received → pending_shear → in_shear → sheared → pending_press_brake → in_press_brake → done → …`
-
-Las transiciones permitidas están centralizadas en `services/orders.js::STATUS_TRANSITIONS`.
-
-### Prioridades
-
-| Urgencia detectada        | Prioridad         |
-|---------------------------|-------------------|
-| "hoy"                     | `critical`        |
-| "mañana primera hora"     | `very_high`       |
-| "mañana última hora" / "mañana" | `high`      |
-| "pasado mañana" / fecha explícita | `medium`  |
-| sin fecha clara           | `pending_validation` |
-
-Cambiar reglas = editar `parser.js::priorityFromUrgency`. Sin redespliegue del frontend.
+- **Parser aislado tras un contrato estable.** Es una función pura: recibe texto
+  y devuelve siempre la misma forma de objeto. *Por qué:* es el componente que
+  más se equivoca y más va a cambiar; sustituir su implementación no toca rutas
+  ni modelo de datos. *Coste:* una capa de indirección sobre ~200 líneas de
+  expresiones regulares.
+- **SQLite con driver síncrono** (`better-sqlite3`) en vez de un motor
+  cliente-servidor. *Por qué:* el destino es una máquina en un taller, sin
+  administración; es transaccional y elimina `async/await` de toda la capa de
+  datos. *Coste:* sin concurrencia de escritura ni acceso remoto; migrar a
+  PostgreSQL obliga a reescribir la capa de datos y volverla asíncrona.
+- **Guardar el texto original íntegro.** *Por qué:* el parser falla por
+  definición; si se descarta el original, el error es irreversible. Conservarlo
+  lo hace reprocesable. *Coste:* se duplica el texto (pedido + mensaje).
+- **Transiciones de estado en un único mapa.** *Por qué:* cambiar el flujo del
+  taller es editar un objeto, no repartir condicionales por el código. *Coste:*
+  ninguno relevante.
+- **Marca `is_demo` en la propia tabla** en lugar de dos entornos. *Por qué:*
+  permite datos de prueba y reales conviviendo, borrando solo los de prueba.
+  *Coste:* hay que acordarse de filtrar por ese campo en cualquier analítica.
 
 ---
 
-## 5. Estructura del proyecto
+## Seguridad (en esta demo pública)
 
-```
-taller-pedidos-demo/
-├── backend/
-│   ├── package.json
-│   ├── .env.example
-│   ├── data/                      # SQLite DB (se crea al arrancar)
-│   ├── storage/uploads/           # dibujos/imágenes
-│   └── src/
-│       ├── server.js              # entrypoint Express
-│       ├── models/
-│       │   └── db.js              # schema + conexión SQLite
-│       ├── services/
-│       │   ├── parser.js          # extracción de info desde mensajes
-│       │   └── orders.js          # lógica de negocio (crear, transicionar, priorizar)
-│       ├── routes/
-│       │   ├── orders.js          # CRUD + cambio de estado + adjuntos
-│       │   ├── webhooks.js        # WhatsApp + Email
-│       │   └── demo.js            # modo simulación
-│       ├── middleware/            # (reservado para auth en fase 2)
-│       ├── utils/                 # (reservado)
-│       └── seeds/
-│           └── run-seed.js        # script standalone de datos demo
-├── frontend/
-│   └── index.html                 # panel de taller (autocontenido)
-└── docs/
-    ├── API.md
-    └── ROADMAP.md
-```
+- **CORS cerrado al propio origen.** El panel es *same-origin*; no se permite
+  ningún origen cruzado.
+- **Webhooks desactivados por defecto** (`WEBHOOKS_ENABLED`). Están
+  implementados (`routes/webhooks.js`) para mostrar el diseño de payload
+  normalizado, pero no se montan en público: así no queda una escritura pública
+  sin autenticar, ni la descarga de URLs arbitrarias del webhook. La entrada de
+  mensajes en la demo es el endpoint interno del panel.
+- **Sin sembrado ni borrado por HTTP.** La base se siembra al desplegar con
+  `npm run seed`; no hay endpoint de reinicio ni de borrado masivo alcanzable
+  desde fuera. `simulate` solo **añade** un pedido.
 
 ---
 
-## 6. API
+## LIMITACIONES CONOCIDAS
 
-Documentación detallada en `docs/API.md`. Resumen:
+Escritas a propósito antes de que las encuentre otro. Son reales.
 
-| Método | Ruta                                | Qué hace |
-|--------|-------------------------------------|----------|
-| GET    | `/api/health`                       | Healthcheck |
-| POST   | `/api/orders`                       | Crear pedido (multipart, acepta adjuntos) |
-| GET    | `/api/orders?status=&priority=&machine=` | Listar con filtros |
-| GET    | `/api/orders/:id`                   | Detalle con attachments y eventos |
-| POST   | `/api/orders/:id/status`            | Cambiar estado |
-| POST   | `/api/orders/:id/priority`          | Cambiar prioridad manual |
-| PATCH  | `/api/orders/:id`                   | Editar campos (notes, medidas, due_at, etc.) |
-| POST   | `/api/orders/:id/attachments`       | Subir adjunto adicional |
-| POST   | `/api/orders/:id/events`            | Registrar evento manual (incidencia) |
-| GET    | `/api/orders/alerts/stale-urgent`   | Pedidos urgentes no iniciados (<2h al vencimiento) |
-| POST   | `/api/webhooks/whatsapp`            | Webhook WhatsApp |
-| POST   | `/api/webhooks/email`               | Webhook email |
-| POST   | `/api/demo/seed`                    | Generar pedidos ficticios |
-| DELETE | `/api/demo/seed`                    | Borrar pedidos demo |
+- **Sin idempotencia.** El diseño de ingesta por webhook no deduplica: un
+  **reenvío del proveedor crearía un pedido duplicado** (no hay clave única por
+  identificador de mensaje). En la demo los webhooks están desactivados, pero la
+  limitación es del diseño.
+- **Sin reintentos ni cola.** No hay backoff, ni cola de mensajes, ni
+  *dead-letter*. Si un paso falla, no se reintenta solo.
+- **Sin autenticación en los endpoints.** `/api/orders` y `/api/demo/simulate`
+  son abiertos. No hay login, ni tokens, ni roles en el backend.
+- **Sin control de concurrencia.** Dos operarios actuando sobre el mismo pedido
+  a la vez pueden pisarse: no hay bloqueo optimista ni versión de fila.
+- **Sin migraciones versionadas.** El esquema se aplica de forma idempotente al
+  arrancar; un cambio de columna sobre una base con datos existentes se hace a
+  mano.
 
----
-
-## 7. Diseño de pantallas
-
-**Panel de taller** (`frontend/index.html`):
-
-1. **Vista Activos** — todos los pedidos en curso, ordenados por prioridad y
-   fecha. Cards grandes, borde izquierdo con color de prioridad, botón gigante
-   con la siguiente acción contextual (INICIAR CORTE / INICIAR PLEGADO / TERMINAR / …).
-2. **Vista Pendientes de validar** — pedidos a los que les falta información.
-3. **Vista Terminados** — pedidos `done`, `ready_for_pickup`, `delivered`.
-4. **Modal de detalle** — dibujo a gran tamaño, datos, texto original, timeline
-   completo, botón de incidencia.
-5. **Modal de creación manual** — para dar de alta un pedido sin pasar por
-   WhatsApp/email (útil para pedidos que llegan por teléfono).
-
-Diseño pensado para industrial: botones >14px, alto contraste, poco texto,
-código de color inmediato.
+Ninguna de estas es difícil de resolver; están fuera del alcance de una demo y
+se documentan para ser honestos sobre qué es y qué no es este código.
 
 ---
 
-## 8. Automatizaciones implementadas
+## AUTORÍA
 
-- **Creación automática** de pedido al entrar mensaje por webhook.
-- **Clasificación de prioridad** automática según urgencia detectada.
-- **Marcado como incompleto** si faltan nº pedido, fecha de entrega o dibujo.
-- **Trazabilidad total** en `order_events`: creación, incompleto_flag,
-  status_changed, priority_changed, fields_updated, attachment_added.
-- **Estado inicial inteligente**: si el pedido requiere cizalla → `pending_shear`;
-  si no → `pending_press_brake` directo.
-- **Alerta de urgentes no iniciados** vía `GET /alerts/stale-urgent`
-  (cualquier sistema externo — cron, Telegram, etc. — puede consumirlo).
-- **Auto-refresh** del panel cada 20s.
-
-Pendiente de Fase 2: envío proactivo de notificaciones (webhook de salida).
+El modelado del dominio, el vocabulario de taller, la máquina de estados y las
+decisiones de alcance son aportación propia. La escritura del código se hizo
+mediante desarrollo asistido por IA bajo especificación y revisión propias.
 
 ---
 
-## 9. Roadmap
+## Cómo levantarlo
 
-Ver `docs/ROADMAP.md`. Resumen:
-
-- **Fase 1 (esto)**: MVP funcional. Entrada manual + webhooks normalizados +
-  panel + seed demo. **Ya usable desde el primer día.**
-- **Fase 2**: Integración real con WhatsApp Cloud API y email IMAP/Mailgun.
-  Notificaciones de salida (aviso "pedido listo" al montador). Autenticación
-  básica de operarios.
-- **Fase 3**: Mejoras del parser para casos ambiguos y extraccion de medidas
-  desde el propio dibujo. Deteccion de pedidos duplicados.
-- **Fase 4**: Métricas de taller (pedidos/día, tiempo medio por fase, alertas
-  SLA), integración con ERP, escalado a más máquinas, app nativa.
-
----
-
-## 10. Instrucciones para ejecutar el proyecto
-
-### Requisitos
-- Node.js 20+ (el servidor usa `node --watch` para dev)
-- Ningún otro servicio externo
-
-### Arranque
+Requisitos: Node.js 20 o superior. Ningún servicio externo.
 
 ```bash
-cd taller-pedidos-demo/backend
+cd backend
 cp .env.example .env
 npm install
-npm run start
+npm run seed     # siembra 3 clientes, 6 usuarios y ~72 pedidos ficticios
+npm start        # arranca el panel + la API
 ```
 
-Abrir en el navegador: **http://localhost:4000/**
+Abrir **http://localhost:4000**.
 
-### Probar con datos demo
-
-Opción A — desde el panel: botón **"Seed demo"** arriba a la derecha.
-
-Opción B — desde terminal:
-```bash
-curl -X POST http://localhost:4000/api/demo/seed
-```
-
-Opción C — standalone sin arrancar el server:
-```bash
-npm run seed
-```
-
-### Crear un pedido manualmente desde terminal
+Tests del parser (sin dependencias externas):
 
 ```bash
-curl -X POST http://localhost:4000/api/orders \
-  -F channel=whatsapp \
-  -F sender="Juan" \
-  -F text="Pedido 45830, lo necesito hoy. 400x200 e=2mm" \
-  -F attachments=@/ruta/a/dibujo.jpg
+node test-parser.js     # 36 aserciones
 ```
 
-### Simular webhook WhatsApp
+### Qué mirar primero (para una revisión rápida)
 
-```bash
-curl -X POST http://localhost:4000/api/webhooks/whatsapp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "from": "+34600000000",
-    "text": "Pedido 45831 para manana primera hora. 300x150, 2 pliegues.",
-    "media": []
-  }'
-```
-
-### Borrar los pedidos demo
-
-```bash
-curl -X DELETE http://localhost:4000/api/demo/seed
-```
-
----
-
-## 11. Decisiones de diseño
-
-- **SQLite sobre Postgres para MVP**: elimina una pieza móvil. Cuando el
-  volumen o la necesidad de analítica lo justifique, migración mecánica.
-- **Vanilla JS en el panel**: el taller no debe depender de Node/npm en la
-  tablet. `index.html` es un único archivo desplegable en cualquier servidor
-  estático o incluso en un pendrive.
-- **Parser como servicio aislado**: cuando cambie la estrategia de parsing, se
-  sustituye `parseInboundMessage` y nada más cambia.
-- **Webhook normalizado en vez de acoplarse a WhatsApp Cloud API directamente**:
-  permite cambiar de proveedor sin refactorizar. Solo hay que traducir el
-  payload del proveedor al formato esperado (`{ from, text, media: [] }`).
-- **`raw_text` siempre guardado**: si el parser falla, nunca se pierde
-  información — se puede reprocesar.
-- **`is_demo` flag**: permite tener datos de prueba y reales mezclados,
-  borrando solo los demo. Evita tener dos bases de datos.
-- **Transiciones centralizadas**: toda la lógica de qué estado va después de
-  qué está en un solo mapa. Cambiar el flujo = editar un objeto.
-
----
+- `backend/src/services/parser.js` — extracción desde texto libre.
+- `backend/src/services/orders.js` — máquina de estados y trazabilidad.
+- `backend/src/models/db.js` — esquema completo.
+- `backend/src/seeds/demo-generator.js` — generador determinista de la demo.
+- `frontend/index.html` — panel completo en un solo fichero.

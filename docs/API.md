@@ -99,16 +99,21 @@ GET /api/orders/alerts/stale-urgent
 → 200 [ orders ]  (urgentes no iniciados con <2h al vencimiento)
 ```
 
-## Webhooks
+## Webhooks (desactivados en la demo pública)
 
-### WhatsApp (payload normalizado)
+Implementados en `routes/webhooks.js` para mostrar el diseño de ingesta con
+payload normalizado, pero **desactivados por defecto**. Con `WEBHOOKS_ENABLED=1`
+se montan; si no, `/api/webhooks/*` responde `404`. En la demo la entrada de
+mensajes se hace desde el panel con `POST /api/demo/simulate` (abajo).
+
+### WhatsApp (payload normalizado, solo si WEBHOOKS_ENABLED=1)
 ```
 POST /api/webhooks/whatsapp
 Content-Type: application/json
 Body:
 {
   "from": "+34600000000",
-  "text": "Pedido 45830, lo necesito hoy",
+  "text": "Pedido 90830, lo necesito hoy",
   "media": [
     { "url": "https://...", "filename": "dibujo.jpg", "mime_type": "image/jpeg" }
   ]
@@ -116,13 +121,13 @@ Body:
 → 201 { "order_id": "...", "status": "pending_shear" }
 ```
 
-### Email (payload normalizado)
+### Email (payload normalizado, solo si WEBHOOKS_ENABLED=1)
 ```
 POST /api/webhooks/email
 Body:
 {
   "from": "pedidos@example.com",
-  "subject": "Pedido 45831",
+  "subject": "Pedido 90831",
   "text": "Para mañana primera hora. 300x150 e=2mm",
   "attachments": [ { "url": "...", "filename": "plano.pdf" } ]
 }
@@ -131,9 +136,13 @@ Body:
 ## Demo
 
 ```
-POST   /api/demo/seed     → crea 6 pedidos ficticios con dibujos SVG
-DELETE /api/demo/seed     → borra todos los pedidos con is_demo=1
+POST /api/demo/simulate?channel=whatsapp|email|manual
+     → crea UN pedido a partir de un mensaje de ejemplo y devuelve
+       { sent: { channel, sender, text }, order: { ... } }
 ```
+
+El sembrado de datos NO se expone por HTTP: se hace al desplegar con
+`npm run seed`. No hay endpoint de reinicio ni de borrado masivo.
 
 ## Archivos estáticos
 
