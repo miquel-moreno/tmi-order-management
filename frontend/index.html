@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Taller de Pedidos (demo) - Panel de Taller</title>
+<style>
+  /* ===== Reset + base ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f242e;
+    --border: #2a3040;
+    --text: #e9ecf2;
+    --text-dim: #8a94a7;
+    --accent: #ffd21a;
+
+    --prio-critical:   #ff3b30;
+    --prio-very-high:  #ff8a1f;
+    --prio-high:       #ffc933;
+    --prio-medium:     #4da3ff;
+    --prio-low:        #5c6473;
+    --prio-pending:    #a26bff;
+
+    --ok: #3ddc84;
+  }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-size: 16px;
+  }
+  h1, h2, h3 { font-weight: 700; letter-spacing: -0.01em; }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: inherit;
+  }
+
+  /* ===== Layout ===== */
+  .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  header .brand {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  header .brand span { color: var(--accent); }
+  header .clock {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-dim);
+    font-size: 18px;
+  }
+  nav.tabs { display: flex; gap: 6px; }
+  nav.tabs button {
+    padding: 10px 16px;
+    background: transparent;
+    color: var(--text-dim);
+    font-weight: 600;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+  nav.tabs button.active {
+    background: var(--panel-2);
+    color: var(--text);
+  }
+  nav.tabs button .count {
+    display: inline-block;
+    background: var(--border);
+    color: var(--text);
+    padding: 1px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+    font-size: 12px;
+  }
+  nav.tabs button.active .count { background: var(--accent); color: #000; }
+
+  header .actions { display: flex; gap: 8px; }
+  header .actions button {
+    padding: 10px 14px;
+    background: var(--panel-2);
+    color: var(--text);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-weight: 600;
+  }
+  header .actions button:hover { background: var(--border); }
+  header .actions button.primary {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+  }
+
+  main { overflow: hidden; }
+  .view { height: 100%; overflow-y: auto; padding: 22px; }
+
+  /* ===== Cards de pedido ===== */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left-width: 6px;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: transform .06s ease;
+  }
+  .card:hover { transform: translateY(-1px); }
+
+  .card.prio-critical   { border-left-color: var(--prio-critical); }
+  .card.prio-very_high  { border-left-color: var(--prio-very-high); }
+  .card.prio-high       { border-left-color: var(--prio-high); }
+  .card.prio-medium     { border-left-color: var(--prio-medium); }
+  .card.prio-low        { border-left-color: var(--prio-low); }
+  .card.prio-pending_validation { border-left-color: var(--prio-pending); }
+
+  .card .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card .ped-num {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+  .card .ped-num.missing { color: var(--prio-pending); }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .badge.prio-critical   { background: var(--prio-critical); color: #fff; }
+  .badge.prio-very_high  { background: var(--prio-very-high); color: #111; }
+  .badge.prio-high       { background: var(--prio-high); color: #111; }
+  .badge.prio-medium     { background: var(--prio-medium); color: #fff; }
+  .badge.prio-low        { background: var(--prio-low); color: #fff; }
+  .badge.prio-pending_validation { background: var(--prio-pending); color: #fff; }
+  .badge.ch-whatsapp { background: #25D366; color: #000; }
+  .badge.ch-email    { background: #4da3ff; color: #fff; }
+  .badge.ch-manual   { background: #5c6473; color: #fff; }
+
+  .status-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+  }
+
+  .meta {
+    color: var(--text-dim);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .meta strong { color: var(--text); font-weight: 600; }
+  .due {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .due.overdue { color: var(--prio-critical); }
+
+  .card .cta {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .btn {
+    flex: 1;
+    padding: 14px 10px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    text-align: center;
+    transition: background .1s;
+  }
+  .btn:hover { background: var(--border); }
+  .btn.primary { background: var(--accent); color: #000; border-color: var(--accent); }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn.ok      { background: var(--ok); color: #000; border-color: var(--ok); }
+  .btn.ghost   { background: transparent; }
+
+  /* ===== Empty / loading ===== */
+  .empty {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 80px 20px;
+    font-size: 18px;
+  }
+  .empty .big { font-size: 48px; margin-bottom: 12px; }
+
+  /* ===== Modal detalle ===== */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.72);
+    display: none;
+    z-index: 50;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    margin: auto;
+    background: var(--panel);
+    width: min(1100px, 96vw);
+    max-height: 94vh;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    overflow: hidden;
+  }
+  .modal header {
+    background: var(--panel-2);
+    padding: 14px 18px;
+  }
+  .modal-body {
+    overflow-y: auto;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 18px;
+  }
+  @media (max-width: 840px) {
+    .modal-body { grid-template-columns: 1fr; }
+  }
+  .drawing-box {
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    min-height: 340px;
+    position: relative;
+    overflow: hidden;
+  }
+  .drawing-box img { max-width: 100%; max-height: 70vh; display: block; }
+  .drawing-box .no-img { color: var(--text-dim); padding: 40px; text-align: center; }
+  .thumbs { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .thumbs img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
+  .thumbs img.active { border-color: var(--accent); }
+
+  .detail-section { margin-bottom: 18px; }
+  .detail-section h3 {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .detail-kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 14px; }
+  .detail-kv dt { color: var(--text-dim); }
+  .detail-kv dd { color: var(--text); }
+  .raw-text {
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .timeline .t-item {
+    font-size: 13px;
+    color: var(--text-dim);
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+  }
+  .timeline .t-item strong { color: var(--text); }
+
+  .modal-footer {
+    background: var(--panel-2);
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .modal-footer .btn { flex: 0 1 auto; min-width: 160px; padding: 16px 18px; font-size: 16px; }
+
+  /* ===== Form rapido creacion ===== */
+  .form-modal .modal { width: min(620px, 96vw); grid-template-rows: auto 1fr auto; }
+  .form-modal .modal-body { grid-template-columns: 1fr; }
+  .form-modal label { display: block; margin-bottom: 14px; font-size: 14px; color: var(--text-dim); }
+  .form-modal label span { display: block; margin-bottom: 4px; }
+  .form-modal input, .form-modal textarea, .form-modal select {
+    width: 100%;
+    background: #0a0c10;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 15px;
+  }
+  .form-modal textarea { min-height: 100px; resize: vertical; }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--ok);
+    padding: 12px 16px;
+    border-radius: 8px;
+    display: none;
+    z-index: 100;
+  }
+  .toast.show { display: block; animation: slideIn .2s ease-out; }
+  @keyframes slideIn { from { transform: translateY(8px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">PLEG<span>/</span>TALLER</div>
+    <nav class="tabs">
+      <button class="active" data-tab="active">Activos <span class="count" id="count-active">0</span></button>
+      <button data-tab="validation">Pendientes validar <span class="count" id="count-validation">0</span></button>
+      <button data-tab="done">Terminados <span class="count" id="count-done">0</span></button>
+    </nav>
+    <div class="clock" id="clock">--:--</div>
+    <div class="actions">
+      <button id="btn-new">+ Nuevo pedido</button>
+      <button id="btn-seed" title="Genera pedidos de demo">Seed demo</button>
+      <button id="btn-refresh" class="primary">Refrescar</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="view" id="view"></section>
+  </main>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal-backdrop" id="detail-modal">
+  <div class="modal">
+    <header>
+      <div class="brand" id="detail-title">Pedido</div>
+    </header>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer" id="detail-footer"></div>
+  </div>
+</div>
+
+<!-- Modal crear -->
+<div class="modal-backdrop form-modal" id="create-modal">
+  <div class="modal">
+    <header><div class="brand">Nuevo pedido</div></header>
+    <div class="modal-body">
+      <label><span>Canal</span>
+        <select id="f-channel">
+          <option value="manual">Manual</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="email">Email</option>
+        </select>
+      </label>
+      <label><span>Remitente</span>
+        <input id="f-sender" placeholder="Juan (montador)">
+      </label>
+      <label><span>Texto del mensaje</span>
+        <textarea id="f-text" placeholder="Pedido 45827, lo necesito hoy. 400x200 e=2mm RAL 9016..."></textarea>
+      </label>
+      <label><span>Categoría</span>
+        <select id="f-category">
+          <option value="">— Sin categoría —</option>
+          <option>Ventana</option>
+          <option>Puerta</option>
+          <option>Fachada</option>
+          <option>Marco</option>
+          <option>Perfil</option>
+          <option>Bandeja</option>
+          <option>Cubierta</option>
+          <option>Reja</option>
+          <option>Canaleta</option>
+          <option>Vierteaguas</option>
+          <option>Dintel</option>
+        </select>
+      </label>
+      <label><span>RAL de la chapa</span>
+        <input id="f-ral" placeholder="Ej: RAL 9016">
+      </label>
+      <label><span>Dibujo / foto (opcional)</span>
+        <input id="f-file" type="file" accept="image/*,.pdf">
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="cancel-create">Cancelar</button>
+      <button class="btn primary" id="submit-create">Crear pedido</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ==================== Cliente API ====================
+const API = {
+  list:   (q={}) => fetch('/api/orders?' + new URLSearchParams(q)).then(r => r.json()),
+  get:    (id)   => fetch('/api/orders/' + id).then(r => r.json()),
+  status: (id, status) => fetch(`/api/orders/${id}/status`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ status })
+    }).then(r => r.json()),
+  create: (formData) => fetch('/api/orders', {
+      method: 'POST', body: formData
+    }).then(r => r.json()),
+  seed:   () => fetch('/api/demo/seed', { method: 'POST' }).then(r => r.json()),
+};
+
+// ==================== Utils ====================
+const PRIO_LABEL = {
+  critical: 'CRITICO', very_high: 'MUY ALTA', high: 'ALTA',
+  medium: 'MEDIA',    low: 'BAJA',            pending_validation: 'VALIDAR'
+};
+const STATUS_LABEL = {
+  received: 'Recibido',
+  pending_validation: 'Pendiente de validar',
+  pending_shear: 'Pendiente corte',
+  in_shear: 'En corte',
+  sheared: 'Cortado',
+  pending_press_brake: 'Pendiente plegado',
+  in_press_brake: 'En plegado',
+  done: 'Terminado',
+  ready_for_pickup: 'Listo recoger',
+  delivered: 'Entregado',
+  incident: 'Incidencia'
+};
+const CHANNEL_LABEL = { whatsapp: 'WhatsApp', email: 'Email', manual: 'Manual' };
+
+function fmtDue(iso) {
+  if (!iso) return 'Sin fecha';
+  const d = new Date(iso);
+  const now = new Date();
+  const days = Math.round((d - now) / 86400000);
+  const dayLabel =
+      days < 0 ? `HACE ${Math.abs(days)}d` :
+      days === 0 ? 'HOY' :
+      days === 1 ? 'MANANA' : `en ${days}d`;
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  return `${dayLabel} ${hh}:${mm}`;
+}
+function isOverdue(iso) {
+  return iso && new Date(iso) < new Date();
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ==================== Estado ====================
+const state = { tab: 'active', orders: [], currentId: null };
+
+const TAB_QUERY = {
+  active:     (orders) => orders.filter(o => !['done','ready_for_pickup','delivered','pending_validation'].includes(o.status)),
+  validation: (orders) => orders.filter(o => o.status === 'pending_validation'),
+  done:       (orders) => orders.filter(o => ['done','ready_for_pickup','delivered'].includes(o.status)),
+};
+
+// ==================== Render ====================
+function renderList() {
+  const view = document.getElementById('view');
+  const orders = TAB_QUERY[state.tab](state.orders);
+
+  // counts
+  document.getElementById('count-active').textContent     = TAB_QUERY.active(state.orders).length;
+  document.getElementById('count-validation').textContent = TAB_QUERY.validation(state.orders).length;
+  document.getElementById('count-done').textContent       = TAB_QUERY.done(state.orders).length;
+
+  if (orders.length === 0) {
+    view.innerHTML = `<div class="empty"><div class="big">∅</div>Sin pedidos en esta vista</div>`;
+    return;
+  }
+  view.innerHTML = `<div class="grid">${orders.map(cardHTML).join('')}</div>`;
+  view.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.cta')) return;
+      openDetail(el.dataset.id);
+    });
+    const go = el.querySelector('[data-action="advance"]');
+    if (go) go.addEventListener('click', (e) => {
+      e.stopPropagation();
+      advance(el.dataset.id);
+    });
+  });
+}
+
+function nextStatusFor(status) {
+  const map = {
+    received:            'pending_validation',
+    pending_validation:  'pending_shear', // el admin decidira
+    pending_shear:       'in_shear',
+    in_shear:            'sheared',
+    sheared:             'pending_press_brake',
+    pending_press_brake: 'in_press_brake',
+    in_press_brake:      'done',
+    done:                'ready_for_pickup',
+    ready_for_pickup:    'delivered'
+  };
+  return map[status];
+}
+
+function nextStatusLabel(status) {
+  const ns = nextStatusFor(status);
+  if (!ns) return null;
+  const labels = {
+    in_shear: 'INICIAR CORTE',
+    sheared:  'CORTE OK',
+    in_press_brake: 'INICIAR PLEGADO',
+    done: 'TERMINAR',
+    ready_for_pickup: 'LISTO RECOGER',
+    delivered: 'ENTREGADO',
+    pending_shear: 'ENVIAR A CORTE',
+    pending_press_brake: 'ENVIAR A PLEGADO',
+    pending_validation: '—'
+  };
+  return labels[ns] || ns;
+}
+
+function cardHTML(o) {
+  const prioLabel = PRIO_LABEL[o.priority] || o.priority;
+  const nextLabel = nextStatusLabel(o.status);
+  const hasDraw   = (o.attachments || []).some(a => (a.mime_type||'').startsWith('image') || a.mime_type === 'image/svg+xml');
+  return `
+    <div class="card prio-${o.priority}" data-id="${o.id}">
+      <div class="top">
+        <div class="ped-num ${o.external_number ? '' : 'missing'}">
+          ${esc(o.external_number || 'SIN Nº')}
+        </div>
+        <div class="badges">
+          <span class="badge prio-${o.priority}">${prioLabel}</span>
+          <span class="badge ch-${o.channel}">${CHANNEL_LABEL[o.channel]||o.channel}</span>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="due ${isOverdue(o.due_at) && !['done','delivered','ready_for_pickup'].includes(o.status) ? 'overdue' : ''}">
+          ${fmtDue(o.due_at)}
+        </div>
+        <div><strong>De:</strong> ${esc(o.sender || '—')}</div>
+        <div>${o.requires_shear ? '✂︎ cizalla + ' : ''}⌐ plegadora</div>
+        ${o.category ? `<div><strong>Cat:</strong> ${esc(o.category)}</div>` : ''}
+        ${o.ral_type ? `<div><strong>RAL:</strong> ${esc(o.ral_type)}</div>` : ''}
+        ${o.measurements ? `<div><strong>Medidas:</strong> ${esc(o.measurements)}</div>` : ''}
+      </div>
+      <div><span class="status-pill">${STATUS_LABEL[o.status] || o.status}</span></div>
+      <div class="cta">
+        <button class="btn ghost">${hasDraw ? '🗎 Ver dibujo' : 'Detalle'}</button>
+        ${nextLabel ? `<button class="btn primary" data-action="advance">${nextLabel}</button>` : ''}
+      </div>
+    </div>`;
+}
+
+// ==================== Detalle ====================
+async function openDetail(id) {
+  const o = await API.get(id);
+  state.currentId = id;
+  document.getElementById('detail-title').textContent =
+    `${o.external_number || 'SIN Nº'} · ${STATUS_LABEL[o.status] || o.status}`;
+
+  const images = (o.attachments || []).filter(a =>
+    (a.mime_type || '').startsWith('image') || a.mime_type === 'image/svg+xml'
+  );
+  const body = `
+    <div>
+      <div class="drawing-box" id="drawing-box">
+        ${images.length
+          ? `<img src="/uploads/${esc(images[0].filename)}" alt="dibujo">`
+          : `<div class="no-img">SIN DIBUJO ADJUNTO<br><br>Pide al montador que envie la foto.</div>`}
+      </div>
+      ${images.length > 1 ? `<div class="thumbs">
+        ${images.map((im, i) => `<img src="/uploads/${esc(im.filename)}" class="${i===0?'active':''}" data-filename="${esc(im.filename)}">`).join('')}
+      </div>` : ''}
+    </div>
+    <div>
+      <div class="detail-section">
+        <h3>Datos</h3>
+        <dl class="detail-kv">
+          <dt>Nº pedido</dt><dd>${esc(o.external_number || '—')}</dd>
+          <dt>Canal</dt><dd>${CHANNEL_LABEL[o.channel]||o.channel}</dd>
+          <dt>Remitente</dt><dd>${esc(o.sender || '—')}</dd>
+          <dt>Entrega</dt><dd>${fmtDue(o.due_at)}</dd>
+          <dt>Prioridad</dt><dd><span class="badge prio-${o.priority}">${PRIO_LABEL[o.priority]||o.priority}</span></dd>
+          <dt>Fases</dt><dd>${o.requires_shear ? 'Cizalla → ' : ''}Plegadora</dd>
+          <dt>Categoría</dt><dd>${esc(o.category || '—')}</dd>
+          <dt>RAL chapa</dt><dd>${esc(o.ral_type || '—')}</dd>
+          <dt>Medidas</dt><dd>${esc(o.measurements || '—')}</dd>
+          <dt>Radio/plegado</dt><dd>${esc(o.bend_radius || '—')}</dd>
+          <dt>Recibido</dt><dd>${new Date(o.received_at).toLocaleString('es-ES')}</dd>
+        </dl>
+      </div>
+      <div class="detail-section">
+        <h3>Texto original</h3>
+        <div class="raw-text">${esc(o.raw_text || '—')}</div>
+      </div>
+      <div class="detail-section">
+        <h3>Trazabilidad</h3>
+        <div class="timeline">
+          ${(o.events||[]).map(ev =>
+            `<div class="t-item"><strong>${ev.event_type}</strong>
+              ${ev.from_value ? `(${ev.from_value} → ${ev.to_value})` : (ev.to_value ? `→ ${ev.to_value}` : '')}
+              <br><small>${new Date(ev.created_at).toLocaleString('es-ES')} · ${ev.actor}</small></div>`
+          ).join('')}
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('detail-body').innerHTML = body;
+
+  // Cambiar imagen al click en thumb
+  document.querySelectorAll('#detail-body .thumbs img').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('#detail-body .thumbs img').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.querySelector('#drawing-box img').src = '/uploads/' + t.dataset.filename;
+    });
+  });
+
+  // Footer con acciones posibles
+  const nextLabel = nextStatusLabel(o.status);
+  const ns = nextStatusFor(o.status);
+  const footer = document.getElementById('detail-footer');
+  footer.innerHTML = `
+    <button class="btn ghost" id="close-detail">Cerrar</button>
+    ${ns ? `<button class="btn primary" id="advance-btn">${nextLabel}</button>` : ''}
+    ${o.status !== 'incident' ? `<button class="btn" id="incident-btn">Marcar incidencia</button>` : ''}
+  `;
+  document.getElementById('close-detail').onclick = closeDetail;
+  if (ns) {
+    document.getElementById('advance-btn').onclick = async () => {
+      await API.status(o.id, ns);
+      toast('Estado actualizado');
+      closeDetail();
+      refresh();
+    };
+  }
+  const inc = document.getElementById('incident-btn');
+  if (inc) inc.onclick = async () => {
+    await API.status(o.id, 'incident');
+    toast('Incidencia registrada');
+    closeDetail();
+    refresh();
+  };
+
+  document.getElementById('detail-modal').classList.add('open');
+}
+function closeDetail() {
+  document.getElementById('detail-modal').classList.remove('open');
+  state.currentId = null;
+}
+
+// ==================== Acciones ====================
+async function advance(id) {
+  const o = state.orders.find(x => x.id === id);
+  if (!o) return;
+  const ns = nextStatusFor(o.status);
+  if (!ns) return;
+  await API.status(id, ns);
+  toast('Pedido actualizado');
+  refresh();
+}
+
+async function refresh() {
+  state.orders = await API.list({ limit: 500 });
+  renderList();
+}
+
+// Tabs
+document.querySelectorAll('nav.tabs button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabs button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.tab = b.dataset.tab;
+    renderList();
+  });
+});
+
+// Botones header
+document.getElementById('btn-refresh').onclick = refresh;
+document.getElementById('btn-seed').onclick = async () => {
+  const r = await API.seed();
+  toast(`Seed: creados ${r.created_count} pedidos demo`);
+  refresh();
+};
+document.getElementById('btn-new').onclick = () =>
+  document.getElementById('create-modal').classList.add('open');
+document.getElementById('cancel-create').onclick = () =>
+  document.getElementById('create-modal').classList.remove('open');
+
+document.getElementById('submit-create').onclick = async () => {
+  const fd = new FormData();
+  fd.append('channel',  document.getElementById('f-channel').value);
+  fd.append('sender',   document.getElementById('f-sender').value);
+  fd.append('text',     document.getElementById('f-text').value);
+  const cat = document.getElementById('f-category').value;
+  if (cat) fd.append('category', cat);
+  const ral = document.getElementById('f-ral').value.trim();
+  if (ral) fd.append('ral_type', ral);
+  const file = document.getElementById('f-file').files[0];
+  if (file) fd.append('attachments', file);
+  await API.create(fd);
+  document.getElementById('create-modal').classList.remove('open');
+  document.getElementById('f-sender').value = '';
+  document.getElementById('f-text').value = '';
+  document.getElementById('f-category').value = '';
+  document.getElementById('f-ral').value = '';
+  document.getElementById('f-file').value = '';
+  toast('Pedido creado');
+  refresh();
+};
+
+// Cerrar modal al clickar fondo
+document.querySelectorAll('.modal-backdrop').forEach(bd => {
+  bd.addEventListener('click', (e) => { if (e.target === bd) bd.classList.remove('open'); });
+});
+
+// Reloj
+function tickClock() {
+  const d = new Date();
+  document.getElementById('clock').textContent =
+    d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+setInterval(tickClock, 1000); tickClock();
+
+// Auto-refresh cada 20s
+setInterval(refresh, 20000);
+
+refresh();
+</script>
+</body>
+</html>
