@@ -42,8 +42,58 @@
     color: inherit;
   }
 
+  /* ===== Banda de demo ===== */
+  .demo-banner {
+    background: repeating-linear-gradient(45deg, #ffd21a, #ffd21a 14px, #1a1a1a 14px, #1a1a1a 28px);
+    text-align: center;
+    padding: 0;
+  }
+  .demo-banner span {
+    display: inline-block;
+    background: var(--bg);
+    color: var(--accent);
+    padding: 4px 14px;
+    margin: 5px 0;
+    border-radius: 4px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    font-size: 13px;
+  }
+
+  /* ===== Intro (para quien no programa) ===== */
+  .intro-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 0 0 18px 0;
+  }
+  .intro-card h2 { font-size: 17px; margin-bottom: 6px; }
+  .intro-card p { color: var(--text-dim); font-size: 14px; line-height: 1.5; margin-bottom: 4px; }
+  .intro-card .hint { color: var(--text); }
+  .intro-card .dismiss {
+    float: right; color: var(--text-dim); font-size: 20px; line-height: 1;
+    padding: 0 4px; background: none;
+  }
+  .intro-card .dismiss:hover { color: var(--text); }
+
+  /* ===== Resultado de simulacion ===== */
+  .sim-body { padding: 18px; overflow-y: auto; display: block; }
+  .sim-step { margin-bottom: 16px; }
+  .sim-step .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim); margin-bottom: 6px; }
+  .sim-msg {
+    background: #0a0c10; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; white-space: pre-wrap;
+    color: var(--text); font-size: 14px;
+  }
+  .sim-arrow { text-align: center; color: var(--accent); font-size: 22px; margin: 4px 0; }
+  .sim-fields { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px; font-size: 14px; }
+  .sim-fields dt { color: var(--text-dim); }
+  .sim-fields .tag { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
   /* ===== Layout ===== */
-  .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  .app { display: grid; grid-template-rows: auto auto 1fr; height: 100vh; }
   header {
     background: var(--panel);
     border-bottom: 1px solid var(--border);
@@ -355,8 +405,9 @@
 </head>
 <body>
 <div class="app">
+  <div class="demo-banner"><span>⚠ DATOS FICTICIOS — DEMO PÚBLICA</span></div>
   <header>
-    <div class="brand">PLEG<span>/</span>TALLER</div>
+    <div class="brand">TALLER<span>/</span>PEDIDOS</div>
     <nav class="tabs">
       <button class="active" data-tab="active">Activos <span class="count" id="count-active">0</span></button>
       <button data-tab="validation">Pendientes validar <span class="count" id="count-validation">0</span></button>
@@ -364,13 +415,24 @@
     </nav>
     <div class="clock" id="clock">--:--</div>
     <div class="actions">
+      <button id="btn-sim-wa" title="Crea un pedido a partir de un WhatsApp de ejemplo">Simular WhatsApp</button>
+      <button id="btn-sim-email" title="Crea un pedido a partir de un email de ejemplo">Simular email</button>
       <button id="btn-new">+ Nuevo pedido</button>
-      <button id="btn-seed" title="Genera pedidos de demo">Seed demo</button>
       <button id="btn-refresh" class="primary">Refrescar</button>
     </div>
   </header>
 
   <main>
+    <div class="intro-card" id="intro-card">
+      <button class="dismiss" id="intro-dismiss" title="Ocultar">×</button>
+      <h2>Panel de taller de plegado de chapa — demostración</h2>
+      <p>Los pedidos llegan por WhatsApp y email en texto libre. Este sistema lee ese
+         texto, extrae el número de pedido, la urgencia, las medidas y si hace falta
+         cortar, y coloca cada pedido en su cola de trabajo con una prioridad.</p>
+      <p class="hint">Pulsa <strong>«Simular WhatsApp»</strong> o <strong>«Simular email»</strong>
+         para ver cómo entra un mensaje suelto y sale un pedido ya clasificado. Todos los
+         datos de esta página son inventados.</p>
+    </div>
     <section class="view" id="view"></section>
   </main>
 </div>
@@ -399,10 +461,10 @@
         </select>
       </label>
       <label><span>Remitente</span>
-        <input id="f-sender" placeholder="Juan (montador)">
+        <input id="f-sender" placeholder="Montador A">
       </label>
       <label><span>Texto del mensaje</span>
-        <textarea id="f-text" placeholder="Pedido 45827, lo necesito hoy. 400x200 e=2mm RAL 9016..."></textarea>
+        <textarea id="f-text" placeholder="Pedido 90123, lo necesito hoy. 400x200 e=2mm RAL 9016..."></textarea>
       </label>
       <label><span>Categoría</span>
         <select id="f-category">
@@ -434,6 +496,17 @@
   </div>
 </div>
 
+<!-- Modal resultado de simulacion -->
+<div class="modal-backdrop" id="sim-modal">
+  <div class="modal" style="grid-template-rows:auto auto auto;width:min(680px,96vw)">
+    <header><div class="brand">Mensaje entrante simulado</div></header>
+    <div class="sim-body" id="sim-body"></div>
+    <div class="modal-footer">
+      <button class="btn primary" id="sim-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -448,7 +521,9 @@ const API = {
   create: (formData) => fetch('/api/orders', {
       method: 'POST', body: formData
     }).then(r => r.json()),
-  seed:   () => fetch('/api/demo/seed', { method: 'POST' }).then(r => r.json()),
+  simulate: (channel) => fetch('/api/demo/simulate?channel=' + encodeURIComponent(channel), {
+      method: 'POST'
+    }).then(r => r.json()),
 };
 
 // ==================== Utils ====================
@@ -725,11 +800,69 @@ document.querySelectorAll('nav.tabs button').forEach(b => {
 
 // Botones header
 document.getElementById('btn-refresh').onclick = refresh;
-document.getElementById('btn-seed').onclick = async () => {
-  const r = await API.seed();
-  toast(`Seed: creados ${r.created_count} pedidos demo`);
-  refresh();
+
+// ── Simular mensaje entrante ────────────────────────────────────────────────
+const PRIO_TAG_COLOR = {
+  critical: 'var(--prio-critical)', very_high: 'var(--prio-very-high)',
+  high: 'var(--prio-high)', medium: 'var(--prio-medium)', low: 'var(--prio-low)',
+  pending_validation: 'var(--prio-pending)'
 };
+async function runSimulate(channel) {
+  const btns = document.querySelectorAll('#btn-sim-wa, #btn-sim-email');
+  btns.forEach(b => b.disabled = true);
+  try {
+    const r = await API.simulate(channel);
+    renderSimResult(r);
+    document.getElementById('sim-modal').classList.add('open');
+    refresh();
+  } catch (e) {
+    toast('No se pudo simular el mensaje');
+  } finally {
+    btns.forEach(b => b.disabled = false);
+  }
+}
+function renderSimResult({ sent, order }) {
+  const canal = { whatsapp: 'WhatsApp', email: 'Email', manual: 'Manual' }[sent.channel] || sent.channel;
+  const prioColor = PRIO_TAG_COLOR[order.priority] || 'var(--prio-low)';
+  const tag = (txt, color) => `<span class="tag" style="background:${color};color:#000">${esc(txt)}</span>`;
+  document.getElementById('sim-body').innerHTML = `
+    <div class="sim-step">
+      <div class="lbl">1 · Entró este mensaje por ${esc(canal)}</div>
+      <div class="lbl" style="margin-bottom:2px">De: ${esc(sent.sender)}</div>
+      <div class="sim-msg">${esc(sent.text)}</div>
+    </div>
+    <div class="sim-arrow">↓ el sistema lo interpretó ↓</div>
+    <div class="sim-step">
+      <div class="lbl">2 · Y creó este pedido</div>
+      <dl class="sim-fields">
+        <dt>Nº de pedido</dt><dd>${order.external_number ? esc(order.external_number) : '<em style="color:var(--prio-pending)">no detectado</em>'}</dd>
+        <dt>Prioridad</dt><dd>${tag(PRIO_LABEL[order.priority] || order.priority, prioColor)}</dd>
+        <dt>Estado inicial</dt><dd>${esc(STATUS_LABEL[order.status] || order.status)}</dd>
+        <dt>¿Requiere corte?</dt><dd>${order.requires_shear ? 'Sí (pasa por cizalla)' : 'No (solo plegadora)'}</dd>
+        <dt>Medidas</dt><dd>${order.measurements ? esc(order.measurements) : '—'}</dd>
+        <dt>Categoría</dt><dd>${order.category ? esc(order.category) : '—'}</dd>
+        ${order.to_validation ? '<dt>Aviso</dt><dd style="color:var(--prio-pending)">Falta información: enviado a «Pendientes de validar»</dd>' : ''}
+      </dl>
+    </div>`;
+}
+document.getElementById('btn-sim-wa').onclick    = () => runSimulate('whatsapp');
+document.getElementById('btn-sim-email').onclick = () => runSimulate('email');
+document.getElementById('sim-close').onclick = () =>
+  document.getElementById('sim-modal').classList.remove('open');
+document.getElementById('sim-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'sim-modal') e.currentTarget.classList.remove('open');
+});
+
+// ── Intro descartable (recordado por navegador) ─────────────────────────────
+(function () {
+  const card = document.getElementById('intro-card');
+  try { if (localStorage.getItem('demo_intro_hidden') === '1') card.style.display = 'none'; } catch (_) {}
+  document.getElementById('intro-dismiss').onclick = () => {
+    card.style.display = 'none';
+    try { localStorage.setItem('demo_intro_hidden', '1'); } catch (_) {}
+  };
+})();
+
 document.getElementById('btn-new').onclick = () =>
   document.getElementById('create-modal').classList.add('open');
 document.getElementById('cancel-create').onclick = () =>

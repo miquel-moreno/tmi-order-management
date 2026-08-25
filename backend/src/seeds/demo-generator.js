@@ -56,6 +56,22 @@ const CATEGORIES = ['ventana', 'puerta', 'fachada', 'perfil', 'bandeja',
 const RAL_CODES  = ['9016', '9005', '7016', '7035', '9010', '3004'];
 const SHEAR_PHRASES = ['Cortar y plegar.', 'Requiere corte.', 'Cizalla + plegado.', 'Cortado y plegado.'];
 
+// Bateria de mensajes para "Simular mensaje entrante" (interaccion en vivo del
+// panel). Cubre variantes de escritura y algun mensaje incompleto a proposito,
+// para que se vea al parser clasificar y, a veces, mandar a validar. {n} = numero.
+const SIM_TEMPLATES = [
+  'Pedido {n}, lo necesito hoy. 400x200 e=2mm, 2 pliegues r=3mm. RAL 9016.',
+  'ped. {n} para mañana primera hora. Cortar y plegar 350x120x2.',
+  '#{n} pasado mañana. 500x200, radio 2mm. Para fachada.',
+  'nº {n}, para mañana. 300x150 e=3mm. Vierteaguas.',
+  'Pedido {n}. 600x300 e=3mm sin corte. Marco de ventana. RAL 7016.',
+  'ORDEN {n} urgente hoy. Reja 800x400. Cizalla + plegado.',
+  'pedido nº {n} para manana ultima hora. 450x180 e=2mm.',
+  'Foto adjunta, es urgente.',            // incompleto: sin numero ni fecha -> a validar
+  'Pedido {n}. 250x100 e=2mm.',           // incompleto: sin fecha -> a validar
+  'Para mañana. 400x200 e=2mm. Dintel.',  // incompleto: sin numero -> a validar
+];
+
 // Formas de escribir el numero de pedido — cubre las variantes que el parser sabe leer.
 const NUM_FORMS = [
   (n) => `Pedido ${n}`,
@@ -391,4 +407,47 @@ function generateDemo() {
   };
 }
 
-module.exports = { generateDemo, clearDemo, SEED };
+// ── simulateInbound ─────────────────────────────────────────────────────────
+// Crea UN pedido a partir de un mensaje de ejemplo, como si acabara de entrar
+// por el canal indicado. Devuelve el texto enviado y el pedido resultante, para
+// que el panel enseñe la relacion "entra texto suelto -> sale pedido clasificado".
+// Marca is_demo = 1. Los numeros van en un rango 95000+ para no chocar con el seed.
+let simCounter = 95000;
+function simulateInbound(channel = 'whatsapp') {
+  const ch = ['whatsapp', 'email', 'manual'].includes(channel) ? channel : 'whatsapp';
+
+  let sender, client_id = null;
+  if (ch === 'email') {
+    const c = CLIENTS[Math.floor(Math.random() * CLIENTS.length)];
+    sender = `${c.name} <${c.email}>`;
+    client_id = c.id;
+  } else {
+    sender = MONTADORES[Math.floor(Math.random() * MONTADORES.length)];
+  }
+
+  const tpl = SIM_TEMPLATES[Math.floor(Math.random() * SIM_TEMPLATES.length)];
+  const n = simCounter++;
+  let text = tpl.replace('{n}', n);
+  if (ch === 'email') text = `Asunto: ${text.split('.')[0]}\n\n${text}`;
+
+  const atts = Math.random() < 0.7 ? [makeDrawing(`PED-${n}`, simCounter)] : [];
+  const o = orders.createOrderFromInbound({ channel: ch, sender, text, attachments: atts, is_demo: true, client_id });
+
+  return {
+    sent: { channel: ch, sender, text },
+    order: {
+      id: o.id,
+      external_number: o.external_number,
+      status: o.status,
+      priority: o.priority,
+      requires_shear: o.requires_shear,
+      measurements: o.measurements,
+      category: o.category,
+      ral_type: o.ral_type,
+      due_at: o.due_at,
+      to_validation: o.status === 'pending_validation',
+    },
+  };
+}
+
+module.exports = { generateDemo, clearDemo, simulateInbound, SEED };
