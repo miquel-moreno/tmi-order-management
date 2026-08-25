@@ -13,17 +13,21 @@ function normalize(text) {
 }
 
 // --- Numero de pedido ---
-// Acepta: "pedido 12345", "ped. 12345", "#12345", "nº 12345", "num 12345"
+// Acepta: "pedido 12345", "ped. 12345", "#12345", "nº 12345", "num 12345".
+// Un numero de pedido valido DEBE contener una tirada de 5-8 digitos (admite
+// sufijo tipo "12345-A"). Si el candidato extraido no la tiene, se descarta y se
+// trata como "sin numero" -> evita artefactos como "IDO" (la regex comiendose el
+// final de "PEDIDO" via la alternativa "ped").
+function isValidExternalNumber(candidate) {
+  return typeof candidate === 'string' && /\d{5,8}/.test(candidate);
+}
+
 function extractExternalNumber(text) {
   if (!text) return null;
-  const patterns = [
-    /(?:pedido|ped\.?|orden|nº|n°|num(?:ero)?|#)\s*[:\-]?\s*([a-z0-9\-\/]{3,})/i,
-    /\b([0-9]{5,8})\b/  // fallback: un numero largo suelto
-  ];
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (m) return m[1].toUpperCase();
-  }
+  const keyword = text.match(/(?:pedido|ped\.?|orden|nº|n°|num(?:ero)?|#)\s*[:\-]?\s*([a-z0-9][a-z0-9\-\/]{2,})/i);
+  if (keyword && isValidExternalNumber(keyword[1])) return keyword[1].toUpperCase();
+  const loose = text.match(/\b([0-9]{5,8})\b/); // fallback: un numero largo suelto
+  if (loose) return loose[1];
   return null;
 }
 
@@ -141,9 +145,19 @@ function extractRalType(text) {
 }
 
 // --- Requiere cizalla? ---
+// Detecta si el pedido requiere corte en cizalla. IMPORTANTE: respeta la
+// negacion. "sin corte", "no cortar", "ya cortado", "sin cizalla"... significan
+// que NO hay que cortar. Es el fallo mas caro posible: mandar a la cizalla una
+// pieza que no se corta. Estrategia: eliminar del texto las menciones NEGADAS de
+// corte y solo entonces buscar una mencion positiva.
 function detectRequiresShear(text) {
   if (!text) return false;
-  return /\b(cortar|corte|cizalla|cortado|despiece)\b/i.test(text);
+  const t = normalize(text); // minusculas, sin tildes, espacios colapsados
+  const stripped = t.replace(
+    /\b(sin|no|ni|ya)\b(?:\s+\w+){0,3}?\s+(cortar|corte|cortes|cortado|cortada|cizalla|despiece)\b/g,
+    ' '
+  );
+  return /\b(cortar|corte|cortado|cizalla|despiece)\b/.test(stripped);
 }
 
 // --- Completitud ---

@@ -19,6 +19,13 @@ eq(p.extractExternalNumber('#45823 para hoy'),        '45823', '#NNNN');
 eq(p.extractExternalNumber('num 12345-A'),            '12345-A', 'num NNNN-X');
 eq(p.extractExternalNumber('nº 98765'),               '98765', 'nº NNNN');
 eq(p.extractExternalNumber('foto adjunta'),           null,    'sin numero');
+// Regresion: un candidato sin tirada de 5-8 digitos NO es un numero valido.
+// "PEDIDO" sin numero detras no debe producir "IDO" (la regex comiendose "ped").
+eq(p.extractExternalNumber('Pedido.'),                null,    'PEDIDO sin numero -> null (no "IDO")');
+eq(p.extractExternalNumber('pedido nº'),              null,    'pedido nº sin numero -> null');
+eq(p.extractExternalNumber('Asunto: consulta pedido'), null,   'asunto sin numero -> null');
+eq(p.extractExternalNumber('Para manana. 400x200'),   null,    'medidas no son numero de pedido');
+eq(p.extractExternalNumber('Pedido 900123456'),       '900123456', 'tirada de digitos larga sigue valida');
 
 console.log('\n=== extractDueDateAndUrgency ===');
 const now = new Date('2026-04-16T10:00:00.000Z'); // referencia fija
@@ -51,6 +58,17 @@ console.log('\n=== detectRequiresShear ===');
 eq(p.detectRequiresShear('cortar y plegar'),   true,   'cortar');
 eq(p.detectRequiresShear('cizalla + plegadora'), true, 'cizalla');
 eq(p.detectRequiresShear('solo plegar'),       false,  'solo plegar');
+// Regresion: la NEGACION del corte debe resolver a NO requiere cizalla.
+// Es el fallo mas caro: mandar a cortar una pieza que dice "sin corte".
+eq(p.detectRequiresShear('600x300 e=3mm sin corte'),        false, 'sin corte');
+eq(p.detectRequiresShear('no cortar, solo plegar'),          false, 'no cortar');
+eq(p.detectRequiresShear('sin cortar'),                      false, 'sin cortar');
+eq(p.detectRequiresShear('ya cortado, solo plegar'),         false, 'ya cortado');
+eq(p.detectRequiresShear('sin cizalla'),                     false, 'sin cizalla');
+eq(p.detectRequiresShear('no requiere corte'),               false, 'no requiere corte');
+eq(p.detectRequiresShear('sin necesidad de corte'),          false, 'sin necesidad de corte');
+eq(p.detectRequiresShear('Pedido 90001. 400x200. Cortar y plegar. Sin prisa'), true, 'positivo entre otras frases');
+eq(p.detectRequiresShear('600x300 sin corte pero cortar los angulos'), true, 'negacion parcial: hay corte positivo aparte');
 
 console.log('\n=== parseInboundMessage (integracion) ===');
 const r = p.parseInboundMessage({
