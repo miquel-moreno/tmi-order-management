@@ -180,3 +180,27 @@ node test-parser.js     # 36 aserciones
 - `backend/src/models/db.js` — esquema completo.
 - `backend/src/seeds/demo-generator.js` — generador determinista de la demo.
 - `frontend/index.html` — panel completo en un solo fichero.
+
+---
+
+## Despliegue
+
+Contenedor único (Node 20 + SQLite embebida). La base de datos y los adjuntos
+viven en `/data`, que **debe montarse como volumen persistente**. Pensado para
+un VPS con Coolify detrás de un proxy inverso con TLS; el puerto no se publica
+directamente, lo enruta el proxy.
+
+| Variable | Por defecto (imagen) | Para qué |
+|---|---|---|
+| `PORT` | `4000` | Puerto de escucha. |
+| `DB_PATH` | `/data/taller.db` | Fichero SQLite (en el volumen). |
+| `UPLOADS_DIR` | `/data/uploads` | Adjuntos generados (en el volumen). |
+| `PUBLIC_BASE_URL` | — | URL pública, ej. `https://demo.tu-dominio`. |
+| `TIMEZONE` | `Europe/Madrid` | Zona horaria de referencia. |
+| `WEBHOOKS_ENABLED` | `0` | Déjalo en `0` (ver *Seguridad*). |
+
+Al primer arranque, si la base está vacía, el contenedor la siembra solo; en
+reinicios posteriores conserva el estado del volumen.
+
+Procedimiento completo (DNS, Coolify, volumen, TLS, verificación) en
+[`DEPLOY.md`](DEPLOY.md).

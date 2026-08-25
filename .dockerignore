@@ -1,0 +1,11 @@
+.git
+node_modules
+backend/node_modules
+backend/data
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+**/*.db
+**/*.db-*
+backend/.env
+*.log
+.DS_Store
