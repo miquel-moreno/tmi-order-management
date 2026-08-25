@@ -121,7 +121,7 @@ Body:
 POST /api/webhooks/email
 Body:
 {
-  "from": "pedidos@cliente.com",
+  "from": "pedidos@example.com",
   "subject": "Pedido 45831",
   "text": "Para mañana primera hora. 300x150 e=2mm",
   "attachments": [ { "url": "...", "filename": "plano.pdf" } ]
