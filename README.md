@@ -122,29 +122,6 @@ Las transiciones válidas están centralizadas en un único objeto
 
 ---
 
-## LIMITACIONES CONOCIDAS
-
-Escritas a propósito antes de que las encuentre otro. Son reales.
-
-- **Sin idempotencia.** El diseño de ingesta por webhook no deduplica: un
-  **reenvío del proveedor crearía un pedido duplicado** (no hay clave única por
-  identificador de mensaje). En la demo los webhooks están desactivados, pero la
-  limitación es del diseño.
-- **Sin reintentos ni cola.** No hay backoff, ni cola de mensajes, ni
-  *dead-letter*. Si un paso falla, no se reintenta solo.
-- **Sin autenticación en los endpoints.** `/api/orders` y `/api/demo/simulate`
-  son abiertos. No hay login, ni tokens, ni roles en el backend.
-- **Sin control de concurrencia.** Dos operarios actuando sobre el mismo pedido
-  a la vez pueden pisarse: no hay bloqueo optimista ni versión de fila.
-- **Sin migraciones versionadas.** El esquema se aplica de forma idempotente al
-  arrancar; un cambio de columna sobre una base con datos existentes se hace a
-  mano.
-
-Ninguna de estas es difícil de resolver; están fuera del alcance de una demo y
-se documentan para ser honestos sobre qué es y qué no es este código.
-
----
-
 ## AUTORÍA
 
 El modelado del dominio, el vocabulario de taller, la máquina de estados y las
@@ -205,3 +182,17 @@ reinicios posteriores conserva el estado del volumen.
 
 Procedimiento completo (DNS, Coolify, volumen, TLS, verificación) en
 [`DEPLOY.md`](DEPLOY.md).
+
+---
+
+## Alcance y siguiente iteración
+
+Hoy el MVP cubre el flujo completo de un taller de una máquina: ingesta de texto
+libre, parsing y priorización, máquina de estados con trazabilidad, y panel de
+operación. Es un MVP monomáquina, no una plataforma endurecida para alto volumen.
+
+La siguiente iteración lo lleva a producción multiusuario: **idempotencia por
+identificador de mensaje** (un reenvío del proveedor no crea un duplicado),
+**reintentos con cola** ante fallos de un paso, y **autenticación en los
+endpoints** con roles; sobre esa base entran también el control de concurrencia
+por versión de fila y las migraciones de esquema versionadas.
