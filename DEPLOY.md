@@ -12,11 +12,11 @@ TLS y enruta al contenedor.
 | `PORT` | `4000` | Puerto de escucha del contenedor. |
 | `DB_PATH` | `/data/taller.db` | Fichero SQLite. **Debe apuntar al volumen.** |
 | `UPLOADS_DIR` | `/data/uploads` | Adjuntos SVG generados. **En el volumen.** |
-| `PUBLIC_BASE_URL` | — | URL pública, para componer enlaces. Ej: `https://demo.tu-dominio`. |
-| `TIMEZONE` | `Europe/Madrid` | Zona horaria de referencia. |
 | `WEBHOOKS_ENABLED` | `0` | Déjalo en `0`. Con `1` se montan los webhooks públicos (no recomendado en demo). |
 
-`NODE_ENV=production` ya viene fijado en la imagen.
+`NODE_ENV=production` ya viene fijado en la imagen. Estos cuatro valores por
+defecto son correctos para un despliegue estándar: no hace falta definir
+variables a mano.
 
 ## Qué hace el contenedor al arrancar
 
@@ -41,8 +41,9 @@ Estos pasos dependen de tu VPS y tu cuenta de Coolify. Hazlos tú:
    **HTTPS/Let's Encrypt** (Coolify gestiona el certificado con Traefik).
 5. **Volumen persistente.** Añade un *Persistent Storage* montado en **`/data`**.
    Sin esto, los datos se pierden en cada redepliegue.
-6. **Variables de entorno.** Añade `PUBLIC_BASE_URL=https://demo.tu-dominio`.
-   El resto ya trae valores por defecto correctos en la imagen.
+6. **Variables de entorno.** No hace falta añadir ninguna: la imagen trae
+   valores por defecto correctos. (Si algún día activas los webhooks, aquí
+   pondrías `WEBHOOKS_ENABLED=1`.)
 7. **Deploy.** Coolify construye la imagen y levanta el contenedor. El primer
    arranque siembra la demo automáticamente.
 8. **Verifica.** Abre `https://demo.tu-dominio` (panel) y

@@ -195,9 +195,10 @@ directamente, lo enruta el proxy.
 | `PORT` | `4000` | Puerto de escucha. |
 | `DB_PATH` | `/data/taller.db` | Fichero SQLite (en el volumen). |
 | `UPLOADS_DIR` | `/data/uploads` | Adjuntos generados (en el volumen). |
-| `PUBLIC_BASE_URL` | — | URL pública, ej. `https://demo.tu-dominio`. |
-| `TIMEZONE` | `Europe/Madrid` | Zona horaria de referencia. |
 | `WEBHOOKS_ENABLED` | `0` | Déjalo en `0` (ver *Seguridad*). |
+
+La imagen trae valores por defecto correctos; para un despliegue estándar no
+hace falta definir ninguna variable a mano.
 
 Al primer arranque, si la base está vacía, el contenedor la siembra solo; en
 reinicios posteriores conserva el estado del volumen.
