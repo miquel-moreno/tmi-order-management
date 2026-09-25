@@ -6,6 +6,13 @@ Panel de gestión de pedidos para un taller de plegado de chapa de aluminio. Con
 
 ![Panel del taller](./docs/images/panel.png)
 
+**La demo usa datos completamente ficticios.** No está desplegada en ningún
+cliente ni contiene datos reales de nadie.
+
+Stack de la demo: **Node.js + Express + SQLite** (backend) y un **panel HTML/CSS/JS
+sin build** (frontend), servido por el mismo proceso. Sin framework de frontend,
+sin bundler, sin dependencias de servicios externos.
+
 ## En producción: panel de taller de TMI
 
 La versión real de este sistema funciona cada día en TMI. Recoge en un mismo panel los pedidos que entran desde la oficina, los que llegan por correo y los que dan de alta los montadores del cliente desde el móvil.
@@ -26,13 +33,6 @@ Tecnología: HTML, CSS y JavaScript sin build, sobre PostgreSQL gestionado con a
 </tr></table>
 
 <sub>Capturas de producción. Los correos y los planos del cliente aparecen difuminados.</sub>
-
-**Es una demostración con datos completamente ficticios.** No está desplegado en
-ningún cliente ni contiene datos reales de nadie.
-
-Stack: **Node.js + Express + SQLite** (backend) y un **panel HTML/CSS/JS sin
-build** (frontend), servido por el mismo proceso. Sin framework de frontend, sin
-bundler, sin dependencias de servicios externos.
 
 ---
 
