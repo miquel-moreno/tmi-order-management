@@ -6,6 +6,27 @@ Panel de gestión de pedidos para un taller de plegado de chapa de aluminio. Con
 
 ![Panel del taller](./docs/images/panel.png)
 
+## En producción: panel de taller de TMI
+
+La versión real de este sistema funciona cada día en TMI. Recoge en un mismo panel los pedidos que entran desde la oficina, los que llegan por correo y los que dan de alta los montadores del cliente desde el móvil.
+
+- Cada pedido que llega por correo genera automáticamente su **ficha de pedido en PDF**, con los datos del correo y los planos adjuntos, y una **etiqueta** para identificar la pieza en el taller.
+- El pedido avanza por estados, de *Pendiente* a *Entregado*, y el panel se actualiza en tiempo real.
+- Roles separados para montadores, administración y almacén.
+
+Tecnología: HTML, CSS y JavaScript sin build, sobre PostgreSQL gestionado con almacenamiento de archivos y tiempo real. Desarrollado en TMI junto a mi socio.
+
+![Panel de taller en producción](./docs/images/prod-panel-taller.png)
+
+![Detalle de un pedido con su ficha, su etiqueta y sus estados](./docs/images/prod-detalle-pedido.png)
+
+<table><tr>
+<td width="68%"><img src="./docs/images/prod-ficha-pedido.png" alt="Ficha de pedido generada desde el correo"></td>
+<td width="32%"><img src="./docs/images/prod-etiqueta.png" alt="Etiqueta de pedido"></td>
+</tr></table>
+
+<sub>Capturas de producción. Los correos y los planos del cliente aparecen difuminados.</sub>
+
 **Es una demostración con datos completamente ficticios.** No está desplegado en
 ningún cliente ni contiene datos reales de nadie.
 
