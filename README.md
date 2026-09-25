@@ -1,6 +1,11 @@
-# Taller de Pedidos — demo
+# TMI Order Management · Gestión de pedidos del taller
 
-Panel de gestión de pedidos para un taller de plegado de chapa de aluminio.
+Panel de gestión de pedidos para un taller de plegado de chapa de aluminio. Convierte los pedidos que llegan en texto libre (WhatsApp, email) en colas de trabajo con prioridad.
+
+**Demo en vivo:** [demo-taller.tmisystem.com](https://demo-taller.tmisystem.com)
+
+![Panel del taller](./docs/images/panel.png)
+
 **Es una demostración con datos completamente ficticios.** No está desplegado en
 ningún cliente ni contiene datos reales de nadie.
 
