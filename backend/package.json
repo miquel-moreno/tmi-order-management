@@ -1,5 +1,5 @@
 {
-  "name": "tmi-order-management",
+  "name": "workshop-order-management",
   "version": "0.1.0",
   "description": "Motor de entrada de pedidos de taller: texto libre a pedido estructurado con prioridad",
   "main": "src/server.js",

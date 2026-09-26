@@ -1,6 +1,6 @@
-# TMI Order Management · Panel de pedidos del taller
+# Workshop Order Management · Panel de pedidos del taller
 
-Panel en producción en TMI System para gestionar los pedidos de un taller de plegado de chapa. Reúne en un solo sitio los pedidos que entran desde la oficina, por correo y desde el móvil de los montadores del cliente.
+Panel en producción para gestionar los pedidos de un taller de plegado de chapa. Reúne en un solo sitio los pedidos que entran desde la oficina, por correo y desde el móvil de los montadores del cliente.
 
 > Demo disponible bajo petición.
 
@@ -9,7 +9,7 @@ Panel en producción en TMI System para gestionar los pedidos de un taller de pl
 ## Qué hace
 
 - **Entrada de pedidos** desde tres canales: oficina, correo y montadores.
-- **Ficha de pedido en PDF** generada automáticamente con los datos del correo y los planos ([flujo de n8n](https://github.com/miquel-moreno/tmi-n8n-automations)).
+- **Ficha de pedido en PDF** generada automáticamente con los datos del correo y los planos ([flujo de n8n](https://github.com/miquel-moreno/n8n-order-automation)).
 - **Etiqueta** para identificar cada pieza en el taller.
 - **Estados** del pedido, de *Pendiente* a *Entregado*, con el panel actualizado en tiempo real.
 - **Roles** separados para montadores, administración y almacén.
@@ -59,7 +59,7 @@ npm test
 
 ## Mi papel
 
-Desarrollado en TMI junto a mi socio: diseño del flujo de pedidos, panel, generación de documentos y puesta en producción. Desarrollo asistido por IA bajo mi especificación y revisión.
+Diseño y desarrollo de la mayor parte del proyecto: flujo de pedidos, panel, generación de documentos y puesta en producción. Desarrollo asistido por IA bajo mi especificación y revisión.
 
 ---
 
